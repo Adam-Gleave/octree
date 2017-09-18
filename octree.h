@@ -13,6 +13,7 @@ public:
 			throw new std::exception("Minimum node size must be a positive power of two <= octree dimension.");
 		}
 		else {
+			_minSize = minSize;
 			_currentDepth = 1;
 			_maxDimension = dimension;
 
@@ -25,7 +26,7 @@ public:
 	
 	//Recursively delete all children that are not nullptr
 	~Octree() {
-		for each (Octree *child in children) {
+		for each (Octree *child in _children) {
 			if (child) {
 				delete child;
 			}
@@ -40,10 +41,8 @@ public:
 			throw new std::out_of_range("Node does not fit in tree.");
 		}
 
-		auto debug = this->getDimension();
-
 		//If a new node needs to be inserted to reach the intended location, do so
-		if (this->getDimension() > minSize) {		
+		if (this->getDimension() > _minSize) {		
 			//Octant 0
 			if (x  < this->getDimension() / 2 && y  < this->getDimension() / 2 
 				&& z < this->getDimension() / 2) {
@@ -135,6 +134,8 @@ public:
 		else {
 			_state = state;
 		}
+
+		tryRefactor();
 	}
 
 	//Retrieve the state of a particular octree node
@@ -145,14 +146,14 @@ public:
 			throw new std::out_of_range("Node does not fit in tree.");
 		}
 
-		//Throw exception if the node does not exist
-		//(Since we are not sure of the type of _state, we cannot return NULL or nullptr)
-		if (this->getDimension() > minSize) {
+		//Return state of current node if specified node does not exist
+		//Since a full octree is deleted and replaced with a node of the correct state
+		if (this->getDimension() > _minSize) {
 			//Octant 0
 			if (x < this->getDimension() / 2 && y < this->getDimension() / 2
 				&& z < this->getDimension() / 2) {
 				if (!_children[0]) {
-					throw new std::exception("Node does not exist");
+					return _state;
 				}
 
 				return _children[0]->getState(x, y, z);
@@ -161,7 +162,7 @@ public:
 			else if (x >= this->getDimension() / 2 && y < this->getDimension() / 2
 				&& z < this->getDimension() / 2) {
 				if (!_children[1]) {
-					throw new std::exception("Node does not exist");
+					return _state;
 				}
 
 				x -= this->getDimension() / 2;
@@ -171,7 +172,7 @@ public:
 			else if (x >= this->getDimension() / 2 && y < this->getDimension() / 2
 				&& z >= this->getDimension() / 2) {
 				if (!_children[2]) {
-					throw new std::exception("Node does not exist");
+					return _state;
 				}
 
 				x -= this->getDimension() / 2;
@@ -182,7 +183,7 @@ public:
 			else if (x < this->getDimension() / 2 && y < this->getDimension() / 2
 				&& z >= this->getDimension() / 2) {
 				if (!_children[3]) {
-					throw new std::exception("Node does not exist");
+					return _state;
 				}
 
 				z -= this->getDimension() / 2;
@@ -192,7 +193,7 @@ public:
 			if (x < this->getDimension() / 2 && y >= this->getDimension() / 2
 				&& z < this->getDimension() / 2) {
 				if (!_children[4]) {
-					throw new std::exception("Node does not exist");
+					return _state;
 				}
 
 				y -= this->getDimension() / 2;
@@ -202,7 +203,7 @@ public:
 			else if (x >= this->getDimension() / 2 && y >= this->getDimension() / 2
 				&& z < this->getDimension() / 2) {
 				if (!_children[5]) {
-					throw new std::exception("Node does not exist");
+					return _state;
 				}
 
 				x -= this->getDimension() / 2;
@@ -213,7 +214,7 @@ public:
 			else if (x >= this->getDimension() / 2 && y >= this->getDimension() / 2
 				&& z >= this->getDimension() / 2) {
 				if (!_children[6]) {
-					throw new std::exception("Node does not exist");
+					return _state;
 				}
 
 				x -= this->getDimension() / 2;
@@ -225,7 +226,7 @@ public:
 			else if (x < this->getDimension() / 2 && y >= this->getDimension() / 2
 				&& z >= this->getDimension() / 2) {
 				if (!_children[7]) {
-					throw new std::exception("Node does not exist");
+					return _state;
 				}
 
 				y -= this->getDimension() / 2;
@@ -233,6 +234,7 @@ public:
 				return _children[7]->getState(x, y, z);
 			}
 		}
+		//Reached a leaf node
 		else {
 			return _state;
 		}
@@ -249,16 +251,19 @@ public:
 	};
 
 	const uint8_t getMaxDimension() { return _maxDimension; };
+	const uint8_t getMinSize() { return _minSize; };
 	Octree *getParent() { return _parent };
 	Octree *getChild(int index) { return _children[index]; };
 
 	//Value held by octree node (can take any primitive type)
+	//Public, so that it can be accessed by parent nodes
 	T _state = 0;
 
 private:
 	//Alternative constructor for creating child nodes
 	//Only to be called by an Octree object
 	Octree(Octree *parent) {
+		_minSize = parent->getMinSize();
 		_currentDepth = parent->getDepth() + 1;
 		_maxDimension = parent->getMaxDimension();
 		_parent = parent;
@@ -268,7 +273,43 @@ private:
 		}
 	}
 
-	uint8_t minSize;					//Discrete minimum size (in units) of a leaf node
+	//After returning from each stage of recursion, check if all child states are identical
+	//Allows for dynamic memory deallocation
+	void tryRefactor() {
+		if (_children[0]) {
+			T state = _children[0]->_state;
+			bool canOptimise = true;
+			bool isFull = true;
+
+			for each (Octree *child in _children) {
+				if (!child) {
+					isFull = false;
+
+				}
+				else {
+					if (child->_state != state) {
+						canOptimise = false;
+					}
+				}
+
+				if (!isFull || !canOptimise) {
+					break;
+				}
+			}
+
+			//If they are, change the state of the current node to that state, and point children to null
+			//This dynamically frees memory where it can be optimised
+			if (canOptimise && isFull) {
+				_state = state;
+
+				for (int i = 0; i < 8; ++i) {
+					_children[i] = nullptr;
+				}
+			}
+		}
+	}
+
+	uint8_t _minSize;					//Discrete minimum size (in units) of a leaf node
 	uint8_t _currentDepth;				//Depth of current node
 	uint8_t _maxDimension;				//Max dimension of the octree		
 	Octree *_children[8];				//Array of child octrees (nonexistent children are nullptr)				

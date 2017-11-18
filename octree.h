@@ -3,6 +3,17 @@
 
 #include <assert.h>
 
+#define CALCULATE_SIDE(index, bit, searchPos, currMid, newMin, newMax) \
+if (searchPos < currMid)		\
+{								\	
+	index |= bit;				\
+	newMin = currMid;			\	
+}								\
+else							\
+{								\
+	newMax = currMid;			\
+}								\
+
 template <class T>
 class Octree
 {
@@ -65,7 +76,7 @@ public:
 	const T at(int x, int y, int z)
 	{
 		Pos inPos(x, y, z);
-		assert(inPos >= min && inPos < max);
+		assert(inPos >= _min && inPos < _max);
 		Pos nodeMin(_min);
 		Pos nodeMax(_max);
 		Pos nodeSize = _max - _min;
@@ -77,8 +88,35 @@ public:
 
 		while (nodeSize >= _minSize)
 		{
-			//TODO
+			Pos mid = (nodeSize * 0.5f) + nodeMin;
+			OctreeNode* currNode = _rootNode;
+			
+			Pos newMin(nodeMin)
+			Pos newMax(nodeMax)
+			
+			int index = 0;
+			CALCULATE_SIDE(index, 1, inPos.x, mid.x, newMin.x, newMax.x)
+			CALCULATE_SIDE(index, 2, inPos.y, mid.y, newMin.y, newMax.y)
+			CALCULATE_SIDE(index, 4, inPos.z, mid.z, newMin.z, newMax.z)
+			
+			if (!(currNode->_children[index]))
+			{
+				return 0;
+			}
+			
+			currNode = currNode->_children[index];
+			nodeMin = newMin;
+			nodeMax = newMax;
+			nodeSize = currMax - currMin;
 		}
+		
+		return currNode->_data;
+	}
+	
+	void empty()
+	{
+		delete _root;
+		_root = 0;
 	}
 };
 

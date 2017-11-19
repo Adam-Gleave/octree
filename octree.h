@@ -2,45 +2,16 @@
 #define OCTREE_H
 
 #include <assert.h>
-
-#define CALCULATE_SIDE(index, bit, searchPos, currMid, newMin, newMax) \
-if (searchPos < currMid)		\
-{								\	
-	index |= bit;				\
-	newMin = currMid;			\	
-}								\
-else							\
-{								\
-	newMax = currMid;			\
-}								\
+#include <octreepos.h>
 
 template <class T>
 class Octree
 {
 protected:
-	struct Pos
-	{
-		int x;
-		int y;
-		int z;
-	
-		Pos(const Pos& pos2) : x(pos2.x), y(pos2.y), z(pos2.z) {}
-		Pos(const int in_x, const int in_y, const int in_z) : x(in_x), y(in_y), z(in_z) {}
-		Pos(const int pt[3]) : x(pt[0]), y(pt[1]), z(pt[2]) {}
-		Pos operator+(const Pos& pos2) { return Pos(x + pos2.x, y + pos2.y, z + pos2.z); }
-		Pos operator-(const Pos& pos2) { return Pos(x - pos2.x, y - pos2.y, z - pos2.z); }
-		Pos operator*(const Pos& pos2) { return Pos(x * pos2.x, y * pos2.y, z * pos2.y); }
-		Pos operator/(const Pos& pos2) { return Pos(x / pos2.x, y / pos2.y, z / pos2.z); }
-		bool operator<(const Pos& pos2) { return x < pos2.x && y < pos2.y && z < pos2.z; }
-		bool operator>(const Pos& pos2) { return x > pos2.x && y > pos2.y && z > pos2.z; }
-		bool operator<=(const Pos& pos2) { return x <= pos2.x && y <= pos2.y && z <= pos2.z; }
-		bool operator>=(const Pos& pos2) { return x >= pos2.x && y >= pos2.y && z >= pos2.z; }
-		bool operator==(const Pos& pos2) { return x == pos2.x && y == pos2.y && z == pos2.z; }
-		bool operator!=(const Pos& pos2) { return x != pos2.z || y != pos2.y || z != pos2.z; }
-	};
-
+	// Node data structure
 	struct OctreeNode
 	{
+		// Create a new node with null children
 		OctreeNode()
 		{
 			for (int i = 0; i < 8; i++)
@@ -48,75 +19,70 @@ protected:
 				_children[i] = 0;
 			}
 		}
-
+		// If children exist, recursively delete all children
 		virtual ~OctreeNode()
 		{
-			for (int i = 0; i < 8; i++)
+			// All or no children exist - only the first needs to be checked
+			if (children[0])
 			{
-				if (children[i])
-				{
-					delete _children[i];
-				}
+				delete[] _children;
 			}
-		}
-
-		T _data;
-		OctreeNode* _children[8];
-	};
-
-	OctreeNode* _rootNode;
-	Pos _min;
-	Pos _max;
-	Pos _minSize;
-
-public:
-	Octree(int dim, int cellDim = 1) : _min(0, 0, 0), _max(dim, dim, dim), _minSize(cellDim, cellDim, cellDim) {}
-	virtual ~Octree() { delete _rootNode; }
-
-	const T at(int x, int y, int z)
-	{
-		Pos inPos(x, y, z);
-		assert(inPos >= _min && inPos < _max);
-		Pos nodeMin(_min);
-		Pos nodeMax(_max);
-		Pos nodeSize = _max - _min;
-
-		if (!_rootNode)
-		{
-			return 0;
-		}
-
-		while (nodeSize >= _minSize)
-		{
-			Pos mid = (nodeSize * 0.5f) + nodeMin;
-			OctreeNode* currNode = _rootNode;
-			
-			Pos newMin(nodeMin)
-			Pos newMax(nodeMax)
-			
-			int index = 0;
-			CALCULATE_SIDE(index, 1, inPos.x, mid.x, newMin.x, newMax.x)
-			CALCULATE_SIDE(index, 2, inPos.y, mid.y, newMin.y, newMax.y)
-			CALCULATE_SIDE(index, 4, inPos.z, mid.z, newMin.z, newMax.z)
-			
-			if (!(currNode->_children[index]))
-			{
-				return 0;
-			}
-			
-			currNode = currNode->_children[index];
-			nodeMin = newMin;
-			nodeMax = newMax;
-			nodeSize = currMax - currMin;
 		}
 		
-		return currNode->_data;
+		// Insert data into node
+		void insert(T data)
+		{
+			*_data = data;
+		}
+		void insert(T* data)
+		{
+			_data = data;
+		}
+
+		T* _data = nullptr;				// Data stored in node
+		OctreeNode* _children[8];		// Array of child nodes
+	};
+
+	OctreeNode* _rootNode;		// Root node of octree, contains all other nodes
+	OctreePos _min;				// Minimum position of any node in octree
+	OctreePos _max;				// Maximum position of any node in octree
+	OctreePos _minSize;			// Minimum dimension of any node in octree
+
+public:
+	// Initialise octree with a dimension and the smallest cell dimension
+	Octree(const int dim, const int cellDim = 1) : _min(0, 0, 0), 
+		_max(dim, dim, dim), _minSize(cellDim, cellDim, cellDim) {}
+	// Recursively delete all nodes in octree
+	virtual ~Octree() 
+	{ 
+		delete _rootNode; 
 	}
 	
-	void empty()
+	// Retrieve the octree node at specified position
+	OctreeNode* at(const OctreePos searchPos)
 	{
-		delete _root;
-		_root = 0;
+		
+	}
+	// Helpful function overloading
+	OctreeNode* at(const int x, const int y, const int z)
+	{
+		OctreePos searchPos = OctreePos(x, y, z);
+	}
+	OctreeNode* at(const int pos[3])
+	{
+		OctreePos searchPos = OctreePos(pos);
+	}
+	
+	// Check for leaf node (the extremity of the octree)
+	bool isLeafNode(OctreeNode* node)
+	{
+		return node->_children[0] == 0;
+	}
+	
+	void clear()
+	{
+		delete _rootNode;
+		_rootNode = 0;
 	}
 };
 
